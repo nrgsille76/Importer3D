@@ -189,7 +189,7 @@ class ChunkReader():
 			l, o = getInt(data, o)
 			if (t == 0x8B1F):
 				t, o = getInt(data, o)
-				if (t == 0x0B000000):
+				if (t in (0x0B000000, 0xA040000)):
 					data = zlib.decompress(data, zlib.MAX_WBITS|32)
 
 		if (level==0):
@@ -382,12 +382,21 @@ def getPoint3D(chunk, default=0.0):
 				floats.append(f)
 	return floats
 
+def getBezierFloats(pos):
+        refs = getReferences(pos)
+        floats = getPoint3D(pos)
+        if any(rf.getFirst(0x2501) for rf in refs):
+                floats.clear()
+                for ref in refs:
+                        floats.append(ref.getFirst(0x2501).data[0])
+        return floats
+
 def getPosition(pos):
 	mtx = numpy.identity(4, numpy.float32)
 	if (pos):
 		uid = getGUID(pos)
 		if (uid == 0xFFEE238A118F7E02): # => Position XYZ
-			pos = getPoint3D(pos)
+			pos = getBezierFloats(pos)
 		elif (uid == 0x0000000000442312): # => TCB Position
 			pos = pos.getFirst(0x2503).data
 		elif (uid == 0x0000000000002008): # => Bezier Position
@@ -407,7 +416,7 @@ def getRotation(pos):
 	if (pos):
 		uid = getGUID(pos)
 		if (uid == 0x2012): # => Euler XYZ
-			rot = getPoint3D(pos)
+			rot = getBezierFloats(pos)
 			r = FreeCAD.Rotation(degrees(rot[2]), degrees(rot[1]), degrees(rot[0]))
 		elif (uid == 0x0000000000442313): #'TCB Rotation'
 			rot = pos.getFirst(0x2504).data
@@ -443,7 +452,7 @@ def getScale(pos):
 			if (scale is None): scale = pos.getFirst(0x2505)
 			pos = scale.data
 		elif (uid == 0xFEEE238B118F7C01): # 'ScaleXYZ'
-			pos = getPoint3D(pos, 1.0)
+			pos = getBezierFloats(pos[:3])
 		else:
 			FreeCAD.Console.PrintError("Unknown scale 0x%04X=%s!\n" %(uid, pos))
 			return mtx
